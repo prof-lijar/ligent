@@ -5,7 +5,7 @@ from uuid import uuid4
 
 from pydantic import ValidationError
 
-from agents.mock_agents import MockAgent
+from agents.adk_runtime import AdkRoleAgentExecutor, RoleAgentExecutor
 from agents.roles import AgentRole
 from llm.contracts import JsonLLMProvider
 from llm.ollama import OllamaProvider
@@ -56,11 +56,11 @@ class LigentController:
     def __init__(
         self,
         store: ProjectStore | None = None,
-        mock_agent: MockAgent | None = None,
+        agent_executor: RoleAgentExecutor | None = None,
         llm_provider: JsonLLMProvider | None = None,
     ) -> None:
         self.store = store or ProjectStore(get_default_state_path())
-        self.mock_agent = mock_agent or MockAgent()
+        self.agent_executor = agent_executor or AdkRoleAgentExecutor()
         self.llm_provider = llm_provider
 
     def run(self, user_request: str) -> RunPreviewResponse:
@@ -101,35 +101,60 @@ class LigentController:
         )
 
         completed_roles: list[AgentRole] = []
-        for position, (role, instruction) in enumerate(TASK_PLAN, start=1):
-            task = self._create_task(run.id, goal, role, instruction, position)
-            message = self._create_message(project.id, run.id, task, instruction)
-            result = self.mock_agent.run(message, task)
-            completed_task = task.model_copy(
+        try:
+            for position, (role, instruction) in enumerate(TASK_PLAN, start=1):
+                task = self._create_task(run.id, goal, role, instruction, position)
+                message = self._create_message(project.id, run.id, task, instruction)
+                result = self.agent_executor.execute(
+                    task=task,
+                    message=message,
+                    goal=goal,
+                )
+                completed_task = task.model_copy(
+                    update={
+                        "status": TaskStatus.COMPLETED,
+                        "updated_at": datetime.now(UTC),
+                    }
+                )
+
+                self.store.save_task(task)
+                self.store.save_agent_message(message)
+                self.store.save_agent_result(result)
+                self.store.save_task(completed_task)
+                completed_roles.append(role)
+        except Exception as error:
+            failed_run = run.model_copy(
                 update={
-                    "status": TaskStatus.COMPLETED,
+                    "status": RunStatus.FAILED,
                     "updated_at": datetime.now(UTC),
                 }
             )
-
-            self.store.save_task(task)
-            self.store.save_agent_message(message)
-            self.store.save_agent_result(result)
-            self.store.save_task(completed_task)
-            completed_roles.append(role)
+            self.store.save_run(failed_run)
+            self.store.save_decision(
+                DecisionRecord(
+                    id=f"decision_{uuid4().hex}",
+                    run_id=run.id,
+                    summary="ADK-backed agent orchestration failed.",
+                    reason=str(error),
+                    inputs=[goal],
+                    chosenOption="Fail closed and surface the agent runtime error.",
+                    rejectedOptions=["Silently continue after an agent failure."],
+                )
+            )
+            raise
 
         decision = DecisionRecord(
             id=f"decision_{uuid4().hex}",
             run_id=run.id,
-            summary="Completed deterministic mock orchestration.",
+            summary="Completed ADK-backed agent orchestration.",
             reason=(
                 "The MVP controller loop validated task assignment, structured "
-                "agent output, persistence, and final synthesis without using a "
-                "live model provider."
+                "agent output, persistence, and final synthesis with local "
+                "ADK role agents."
             ),
             inputs=[goal],
-            chosenOption="Use deterministic mock agents before Ollama integration.",
-            rejectedOptions=["Call local Ollama before the controller loop is stable."],
+            chosenOption="Use ADK-backed local agents.",
+            rejectedOptions=["Use deterministic mock agents for the main run path."],
         )
         self.store.save_decision(decision)
 
@@ -145,7 +170,7 @@ class LigentController:
             run_id=completed_run.id,
             status=completed_run.status,
             summary=(
-                "Ligent completed a deterministic mock orchestration run with "
+                "Ligent completed an ADK-backed orchestration run with "
                 f"{len(completed_roles)} scoped agents."
             ),
             next_step="Review persisted tasks, agent results, and the controller decision.",

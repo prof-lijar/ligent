@@ -1,3 +1,4 @@
+from agents.mock_agents import MockRoleAgentExecutor
 from services.controller import LigentController
 from services.schemas import (
     AgentResultSummary,
@@ -13,6 +14,10 @@ from state.store import ProjectStore
 
 
 def create_run_preview(payload: RunPreviewRequest) -> RunPreviewResponse:
+    return LigentController(agent_executor=MockRoleAgentExecutor()).run(payload.goal)
+
+
+def create_adk_preview(payload: RunPreviewRequest) -> RunPreviewResponse:
     return LigentController().run(payload.goal)
 
 

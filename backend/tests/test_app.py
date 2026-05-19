@@ -43,6 +43,32 @@ def test_preview_run_returns_typed_placeholder(tmp_path, monkeypatch) -> None:
     assert body["createdAt"]
 
 
+def test_adk_preview_run_returns_typed_placeholder(monkeypatch, tmp_path) -> None:
+    monkeypatch.setenv("LIGENT_STATE_DB", str(tmp_path / "ligent.sqlite"))
+
+    def fake_create_adk_preview(payload: object) -> RunPreviewResponse:
+        return RunPreviewResponse.model_validate(
+            {
+                "runId": "run_adk",
+                "status": "completed",
+                "summary": "ADK preview complete.",
+                "nextStep": "Review the agent outputs.",
+                "assignedAgents": ["planner"],
+                "createdAt": "2026-05-19T00:00:00Z",
+            }
+        )
+
+    monkeypatch.setattr(api.routes, "create_adk_preview", fake_create_adk_preview)
+
+    response = client.post(
+        "/runs/adk-preview",
+        json={"goal": "Use ADK agents"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["summary"] == "ADK preview complete."
+
+
 def test_run_detail_returns_persisted_demo_state(tmp_path, monkeypatch) -> None:
     monkeypatch.setenv("LIGENT_STATE_DB", str(tmp_path / "ligent.sqlite"))
 

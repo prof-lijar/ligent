@@ -62,6 +62,20 @@ curl -X POST http://127.0.0.1:8765/runs/ollama-plan \
 
 Set `LIGENT_OLLAMA_MODEL` to change the default model used when the request does not include one.
 
+## Agents
+
+Ligent's role agents live in `backend/agents/` and are built with `google-adk` against local Ollama via `LiteLlm`. The controller runs Planner, Design, Implement, QA, DevOps, and Documentation as separate scoped turns, then persists their outputs in SQLite.
+
+The agent package follows the ADK/agents-cli style of a root controller plus specialized sub-agents. The current runtime is local-only and does not require hosted API keys by default.
+
+To run the ADK-backed preview path directly:
+
+```sh
+curl -X POST http://127.0.0.1:8765/runs/adk-preview \
+  -H 'Content-Type: application/json' \
+  -d '{"goal":"Plan a small Ligent change"}'
+```
+
 ## Validation
 
 ```sh

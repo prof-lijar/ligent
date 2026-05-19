@@ -1,7 +1,30 @@
 from agents.roles import AgentRole
 from services.controller import LigentController
+from state.models import AgentResult
 from state.models import RunStatus, TaskStatus
 from state.store import ProjectStore
+
+
+class FakeRoleExecutor:
+    def execute(self, *, task, message, goal) -> AgentResult:
+        if task.assigned_agent is None:
+            raise ValueError("task must have an assigned agent")
+
+        return AgentResult(
+            id=f"result_{task.id}",
+            message_id=message.id,
+            task_id=task.id,
+            agent=task.assigned_agent,
+            result={
+                "summary": task.title,
+                "recommendation": f"{task.assigned_agent.value} handled: {goal}",
+                "status": "completed",
+                "evidence": [task.id],
+                "confidence": 0.75,
+            },
+            evidence=[task.id, task.assigned_agent.value],
+            confidence=0.75,
+        )
 
 
 class FakePlanningProvider:
@@ -70,7 +93,7 @@ class RepairingPlanningProvider:
 
 def test_controller_creates_run_tasks_results_and_decision(tmp_path) -> None:
     store = ProjectStore(tmp_path / "ligent.sqlite")
-    controller = LigentController(store=store)
+    controller = LigentController(store=store, agent_executor=FakeRoleExecutor())
 
     response = controller.run("Add a health endpoint")
 
@@ -94,7 +117,7 @@ def test_controller_creates_run_tasks_results_and_decision(tmp_path) -> None:
     assert len(messages) == 6
     assert len(decisions) == 2
     assert decisions[0].summary == "Tool permission boundary enforced."
-    assert decisions[1].summary == "Completed deterministic mock orchestration."
+    assert decisions[1].summary == "Completed ADK-backed agent orchestration."
     assert all(task.status == TaskStatus.COMPLETED for task in tasks)
 
     for task in tasks:
@@ -117,7 +140,7 @@ def test_controller_rejects_empty_request(tmp_path) -> None:
 
 def test_controller_uses_run_scoped_task_ids(tmp_path) -> None:
     store = ProjectStore(tmp_path / "ligent.sqlite")
-    controller = LigentController(store=store)
+    controller = LigentController(store=store, agent_executor=FakeRoleExecutor())
 
     first_run = controller.run("First request")
     second_run = controller.run("Second request")

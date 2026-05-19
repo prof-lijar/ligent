@@ -79,6 +79,8 @@ Use these references for future agent design, agent CLI patterns, task delegatio
 - https://github.com/google/agents-cli
 - https://github.com/google/adk-python
 
+The ADK runtime currently uses local Ollama-backed role agents and keeps the deterministic mock executor only as a preview fallback. Future agent work should extend this package instead of adding new orchestration logic in `services/`.
+
 ### `backend/llm/`
 
 Provider-agnostic local model interfaces, Ollama integration, provider errors, and model response contracts.

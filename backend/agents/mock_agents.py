@@ -27,3 +27,17 @@ class MockAgent:
     def _recommendation(task: TaskState) -> str:
         role = task.assigned_agent.value if task.assigned_agent else "agent"
         return f"{role} completed deterministic mock work for: {task.description}"
+
+
+class MockRoleAgentExecutor:
+    def __init__(self, mock_agent: MockAgent | None = None) -> None:
+        self.mock_agent = mock_agent or MockAgent()
+
+    def execute(
+        self,
+        *,
+        task: TaskState,
+        message: AgentMessage,
+        goal: str,
+    ) -> AgentResult:
+        return self.mock_agent.run(message, task)

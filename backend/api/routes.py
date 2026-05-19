@@ -6,7 +6,12 @@ from llm.errors import (
     OllamaModelUnavailableError,
     OllamaUnavailableError,
 )
-from services.run_service import create_ollama_plan, create_run_preview, get_run_detail
+from services.run_service import (
+    create_adk_preview,
+    create_ollama_plan,
+    create_run_preview,
+    get_run_detail,
+)
 from services.schemas import (
     HealthResponse,
     OllamaPlanRequest,
@@ -26,6 +31,11 @@ def health() -> HealthResponse:
 @router.post("/runs/preview", response_model=RunPreviewResponse)
 def preview_run(payload: RunPreviewRequest) -> RunPreviewResponse:
     return create_run_preview(payload)
+
+
+@router.post("/runs/adk-preview", response_model=RunPreviewResponse)
+def adk_preview_run(payload: RunPreviewRequest) -> RunPreviewResponse:
+    return create_adk_preview(payload)
 
 
 @router.get("/runs/{run_id}", response_model=RunDetailResponse)
