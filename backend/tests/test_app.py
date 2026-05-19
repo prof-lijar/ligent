@@ -13,7 +13,9 @@ def test_health_endpoint_returns_ok() -> None:
     assert response.json() == {"status": "ok", "service": "ligent-backend"}
 
 
-def test_preview_run_returns_typed_placeholder() -> None:
+def test_preview_run_returns_typed_placeholder(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("LIGENT_STATE_DB", str(tmp_path / "ligent.sqlite"))
+
     response = client.post(
         "/runs/preview",
         json={"goal": "Scaffold the Ligent backend"},
@@ -22,14 +24,17 @@ def test_preview_run_returns_typed_placeholder() -> None:
     assert response.status_code == 200
     body = response.json()
     assert body["runId"].startswith("run_")
-    assert body["status"] == "queued"
+    assert body["status"] == "completed"
     assert body["summary"]
-    assert body["nextStep"].endswith("Scaffold the Ligent backend")
+    assert body["nextStep"] == (
+        "Review persisted tasks, agent results, and the controller decision."
+    )
     assert body["assignedAgents"] == [
         "planner",
         "design",
         "implement",
         "qa",
+        "devops",
         "documentation",
     ]
     assert body["createdAt"]

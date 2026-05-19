@@ -13,3 +13,4 @@ desktop/dist/
 desktop/src-tauri/gen/
 desktop/src-tauri/target/
 backend/.venv/
+backend/.local/
