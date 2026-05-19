@@ -4,7 +4,12 @@ target/
 
 .DS_Store
 *.log
+__pycache__/
+.pytest_cache/
+.venv/
+*.egg-info/
 
 desktop/dist/
 desktop/src-tauri/gen/
 desktop/src-tauri/target/
+backend/.venv/
