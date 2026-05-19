@@ -6,10 +6,11 @@ from llm.errors import (
     OllamaModelUnavailableError,
     OllamaUnavailableError,
 )
-from services.run_service import create_ollama_plan, create_run_preview
+from services.run_service import create_ollama_plan, create_run_preview, get_run_detail
 from services.schemas import (
     HealthResponse,
     OllamaPlanRequest,
+    RunDetailResponse,
     RunPreviewRequest,
     RunPreviewResponse,
 )
@@ -25,6 +26,14 @@ def health() -> HealthResponse:
 @router.post("/runs/preview", response_model=RunPreviewResponse)
 def preview_run(payload: RunPreviewRequest) -> RunPreviewResponse:
     return create_run_preview(payload)
+
+
+@router.get("/runs/{run_id}", response_model=RunDetailResponse)
+def run_detail(run_id: str) -> RunDetailResponse:
+    detail = get_run_detail(run_id)
+    if detail is None:
+        raise HTTPException(status_code=404, detail="Run not found.")
+    return detail
 
 
 @router.post("/runs/ollama-plan", response_model=RunPreviewResponse)

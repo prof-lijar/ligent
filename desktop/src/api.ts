@@ -11,6 +11,47 @@ export type RunPreview = {
   createdAt: string;
 };
 
+export type AgentResultSummary = {
+  agent: string;
+  result: Record<string, unknown>;
+  evidence: string[];
+  confidence: number;
+};
+
+export type TaskDetail = {
+  id: string;
+  title: string;
+  description: string;
+  status: string;
+  assignedAgent: string | null;
+  instructions: string;
+  results: AgentResultSummary[];
+};
+
+export type DecisionSummary = {
+  id: string;
+  summary: string;
+  reason: string;
+  chosenOption: string;
+};
+
+export type ConflictSummary = {
+  id: string;
+  summary: string;
+  status: string;
+};
+
+export type RunDetail = {
+  runId: string;
+  status: string;
+  goal: string;
+  finalSummary: string;
+  tasks: TaskDetail[];
+  decisions: DecisionSummary[];
+  conflicts: ConflictSummary[];
+  createdAt: string;
+};
+
 export type HealthResponse = {
   status: string;
   service: string;
@@ -58,4 +99,8 @@ export async function submitGoal(goal: string): Promise<RunPreview> {
     method: "POST",
     body: JSON.stringify({ goal }),
   });
+}
+
+export async function fetchRunDetail(runId: string): Promise<RunDetail> {
+  return request<RunDetail>(`/runs/${encodeURIComponent(runId)}`);
 }

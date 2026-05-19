@@ -2,9 +2,10 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 import {
   BackendUnavailableError,
   checkBackendHealth,
+  fetchRunDetail,
   submitGoal,
 } from "./api";
-import type { BackendStatus, RunPreview } from "./api";
+import type { BackendStatus, RunDetail, RunPreview } from "./api";
 
 type RunStatus = "idle" | "submitting" | "ready" | "error";
 
@@ -16,12 +17,16 @@ const placeholderStages = [
   "Final synthesis",
 ];
 
+const demoGoal =
+  "Review the sample workspace app and plan a small change that adds a visible health status, implementation notes, QA checks, and documentation.";
+
 export default function App() {
-  const [goal, setGoal] = useState("");
+  const [goal, setGoal] = useState(demoGoal);
   const [status, setStatus] = useState<RunStatus>("idle");
   const [backendStatus, setBackendStatus] =
     useState<BackendStatus>("checking");
   const [run, setRun] = useState<RunPreview | null>(null);
+  const [runDetail, setRunDetail] = useState<RunDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const canSubmit =
@@ -73,10 +78,14 @@ export default function App() {
 
     setStatus("submitting");
     setError(null);
+    setRun(null);
+    setRunDetail(null);
 
     try {
       const result = await submitGoal(goal.trim());
+      const detail = await fetchRunDetail(result.runId);
       setRun(result);
+      setRunDetail(detail);
       setStatus("ready");
     } catch (submitError) {
       setStatus("error");
@@ -123,7 +132,7 @@ export default function App() {
                 rows={8}
               />
               <button type="submit" disabled={!canSubmit}>
-                {status === "submitting" ? "Starting run" : "Start preview run"}
+                {status === "submitting" ? "Running demo" : "Run local demo"}
               </button>
             </form>
 
@@ -195,7 +204,82 @@ export default function App() {
             </div>
           </section>
         </div>
+
+        {runDetail ? (
+          <section className="detail-pane" aria-labelledby="detail-title">
+            <div className="section-heading">
+              <p className="eyebrow">Persisted run</p>
+              <h2 id="detail-title">Agent outputs and decisions</h2>
+            </div>
+
+            <div className="task-board">
+              {runDetail.tasks.map((task) => (
+                <article key={task.id} className="task-row">
+                  <div>
+                    <p className="task-agent">
+                      {task.assignedAgent ?? "unassigned"} - {task.status}
+                    </p>
+                    <h3>{task.title}</h3>
+                    <p>{task.description}</p>
+                  </div>
+                  <div className="task-output">
+                    {task.results.map((result) => (
+                      <div key={`${task.id}-${result.agent}`}>
+                        <p className="output-title">
+                          {result.agent} output -{" "}
+                          {Math.round(result.confidence * 100)}%
+                        </p>
+                        <p>{formatResult(result.result)}</p>
+                        {result.evidence.length > 0 ? (
+                          <p className="evidence">
+                            Evidence: {result.evidence.join(", ")}
+                          </p>
+                        ) : null}
+                      </div>
+                    ))}
+                  </div>
+                </article>
+              ))}
+            </div>
+
+            <div className="decision-strip">
+              <section>
+                <p className="eyebrow">Decisions</p>
+                {runDetail.decisions.map((decision) => (
+                  <div key={decision.id} className="decision-item">
+                    <h3>{decision.summary}</h3>
+                    <p>{decision.reason}</p>
+                    <p className="evidence">Chosen: {decision.chosenOption}</p>
+                  </div>
+                ))}
+              </section>
+              <section>
+                <p className="eyebrow">Final</p>
+                <h3>{runDetail.finalSummary}</h3>
+                <p className="muted">
+                  Conflicts:{" "}
+                  {runDetail.conflicts.length > 0
+                    ? runDetail.conflicts
+                        .map((conflict) => conflict.summary)
+                        .join(", ")
+                    : "none recorded"}
+                  .
+                </p>
+              </section>
+            </div>
+          </section>
+        ) : null}
       </section>
     </main>
   );
+}
+
+function formatResult(result: Record<string, unknown>) {
+  const recommendation = result.recommendation;
+  if (typeof recommendation === "string") return recommendation;
+
+  const summary = result.summary;
+  if (typeof summary === "string") return summary;
+
+  return JSON.stringify(result);
 }

@@ -282,6 +282,75 @@ dd {
   overflow-wrap: anywhere;
 }
 
+.detail-pane {
+  border-top: 1px solid rgba(24, 32, 28, 0.15);
+  padding-top: 26px;
+}
+
+.task-board {
+  display: grid;
+  gap: 0;
+}
+
+.task-row {
+  display: grid;
+  grid-template-columns: minmax(240px, 0.9fr) minmax(280px, 1.1fr);
+  gap: 28px;
+  border-top: 1px solid rgba(24, 32, 28, 0.14);
+  padding: 20px 0;
+}
+
+.task-row:last-child {
+  border-bottom: 1px solid rgba(24, 32, 28, 0.14);
+}
+
+.task-row h3,
+.decision-item h3,
+.decision-strip h3 {
+  margin-bottom: 10px;
+  font-size: 1rem;
+  line-height: 1.3;
+}
+
+.task-row p,
+.decision-item p {
+  margin-bottom: 0;
+  color: #4f5e57;
+  line-height: 1.5;
+}
+
+.task-agent,
+.output-title {
+  color: #27352f;
+  font-size: 0.8rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.task-output {
+  display: grid;
+  align-content: start;
+  gap: 16px;
+}
+
+.evidence {
+  margin-top: 8px;
+  color: #6e5640;
+  font-size: 0.9rem;
+}
+
+.decision-strip {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 0.8fr);
+  gap: 32px;
+  padding-top: 28px;
+}
+
+.decision-item {
+  border-top: 1px solid rgba(24, 32, 28, 0.14);
+  padding: 16px 0;
+}
+
 @media (max-width: 840px) {
   .app-shell {
     padding: 18px;
@@ -292,7 +361,9 @@ dd {
   }
 
   .topbar,
-  .run-layout {
+  .run-layout,
+  .task-row,
+  .decision-strip {
     display: flex;
     flex-direction: column;
   }

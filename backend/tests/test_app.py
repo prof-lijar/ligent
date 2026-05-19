@@ -43,6 +43,39 @@ def test_preview_run_returns_typed_placeholder(tmp_path, monkeypatch) -> None:
     assert body["createdAt"]
 
 
+def test_run_detail_returns_persisted_demo_state(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("LIGENT_STATE_DB", str(tmp_path / "ligent.sqlite"))
+
+    preview_response = client.post(
+        "/runs/preview",
+        json={"goal": "Run the Ligent demo"},
+    )
+
+    response = client.get(f"/runs/{preview_response.json()['runId']}")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["goal"] == "Run the Ligent demo"
+    assert body["finalSummary"]
+    assert [task["assignedAgent"] for task in body["tasks"]] == [
+        "planner",
+        "design",
+        "implement",
+        "qa",
+        "devops",
+        "documentation",
+    ]
+    assert all(task["results"] for task in body["tasks"])
+    assert body["decisions"][0]["summary"] == "Tool permission boundary enforced."
+
+
+def test_run_detail_returns_404_for_unknown_run() -> None:
+    response = client.get("/runs/run_missing")
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Run not found."
+
+
 def test_preview_run_rejects_empty_goal() -> None:
     response = client.post("/runs/preview", json={"goal": ""})
 
