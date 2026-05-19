@@ -40,3 +40,17 @@ def test_preview_run_rejects_empty_goal() -> None:
 
     assert response.status_code == 422
 
+
+def test_backend_allows_local_desktop_origin() -> None:
+    response = client.options(
+        "/runs/preview",
+        headers={
+            "Origin": "http://127.0.0.1:1420",
+            "Access-Control-Request-Method": "POST",
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.headers["access-control-allow-origin"] == (
+        "http://127.0.0.1:1420"
+    )

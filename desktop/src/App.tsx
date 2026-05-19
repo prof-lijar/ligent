@@ -1,14 +1,12 @@
-import { FormEvent, useMemo, useState } from "react";
-import { submitGoal } from "./tauri";
+import { FormEvent, useEffect, useMemo, useState } from "react";
+import {
+  BackendUnavailableError,
+  checkBackendHealth,
+  submitGoal,
+} from "./api";
+import type { BackendStatus, RunPreview } from "./api";
 
 type RunStatus = "idle" | "submitting" | "ready" | "error";
-
-type RunPreview = {
-  runId: string;
-  status: string;
-  summary: string;
-  nextStep: string;
-};
 
 const placeholderStages = [
   "Goal intake",
@@ -21,10 +19,45 @@ const placeholderStages = [
 export default function App() {
   const [goal, setGoal] = useState("");
   const [status, setStatus] = useState<RunStatus>("idle");
+  const [backendStatus, setBackendStatus] =
+    useState<BackendStatus>("checking");
   const [run, setRun] = useState<RunPreview | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const canSubmit = goal.trim().length > 0 && status !== "submitting";
+  const canSubmit =
+    goal.trim().length > 0 &&
+    status !== "submitting" &&
+    backendStatus === "available";
+
+  async function verifyBackend() {
+    setBackendStatus("checking");
+
+    try {
+      await checkBackendHealth();
+      setBackendStatus("available");
+    } catch {
+      setBackendStatus("unavailable");
+    }
+  }
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function verifyBackendOnMount() {
+      try {
+        await checkBackendHealth();
+        if (!cancelled) setBackendStatus("available");
+      } catch {
+        if (!cancelled) setBackendStatus("unavailable");
+      }
+    }
+
+    void verifyBackendOnMount();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const statusLabel = useMemo(() => {
     if (status === "submitting") return "Starting";
@@ -48,7 +81,9 @@ export default function App() {
     } catch (submitError) {
       setStatus("error");
       setError(
-        submitError instanceof Error
+        submitError instanceof BackendUnavailableError
+          ? "Start the Ligent backend, then try again."
+          : submitError instanceof Error
           ? submitError.message
           : "Ligent could not start this run.",
       );
@@ -63,7 +98,12 @@ export default function App() {
             <p className="eyebrow">Ligent Desktop</p>
             <h1>Local agent controller</h1>
           </div>
-          <div className={`status-pill status-${status}`}>{statusLabel}</div>
+          <div className="topbar-status">
+            <div className={`backend-pill backend-${backendStatus}`}>
+              Backend {backendStatus}
+            </div>
+            <div className={`status-pill status-${status}`}>{statusLabel}</div>
+          </div>
         </header>
 
         <div className="run-layout">
@@ -87,6 +127,20 @@ export default function App() {
               </button>
             </form>
 
+            {backendStatus === "unavailable" ? (
+              <p className="error-message">
+                Backend unavailable. Run <code>npm run backend:dev</code> from
+                the project root, then{" "}
+                <button
+                  className="inline-action"
+                  type="button"
+                  onClick={() => void verifyBackend()}
+                >
+                  check again
+                </button>
+                .
+              </p>
+            ) : null}
             {error ? <p className="error-message">{error}</p> : null}
           </section>
 
@@ -123,11 +177,19 @@ export default function App() {
                       <dt>Next</dt>
                       <dd>{run.nextStep}</dd>
                     </div>
+                    <div>
+                      <dt>Agents</dt>
+                      <dd>{run.assignedAgents.join(", ")}</dd>
+                    </div>
+                    <div>
+                      <dt>Created</dt>
+                      <dd>{new Date(run.createdAt).toLocaleString()}</dd>
+                    </div>
                   </dl>
                 </>
               ) : (
                 <p className="muted">
-                  Submit a goal to verify the desktop shell and command path.
+                  Submit a goal to verify the desktop to backend path.
                 </p>
               )}
             </div>

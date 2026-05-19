@@ -11,6 +11,7 @@
     "desktop:typecheck": "npm run typecheck --workspace desktop",
     "tauri:dev": "npm run tauri:dev --workspace desktop",
     "tauri:build": "npm run tauri:build --workspace desktop",
+    "tauri:bundle": "npm run tauri:bundle --workspace desktop",
     "backend:install": "python3 -m venv backend/.venv && backend/.venv/bin/python -m pip install -e 'backend[dev]'",
     "backend:test": "backend/.venv/bin/python -m pytest backend/tests",
     "backend:dev": "cd backend && .venv/bin/python -m uvicorn app:app --host 127.0.0.1 --port 8765"
