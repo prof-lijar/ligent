@@ -194,7 +194,7 @@ class ProjectStore:
     ) -> list[ModelT]:
         with self._connect() as connection:
             rows = connection.execute(
-                f"SELECT data FROM {table} WHERE {indexed_column} = ? ORDER BY id",
+                f"SELECT data FROM {table} WHERE {indexed_column} = ? ORDER BY rowid",
                 (indexed_value,),
             ).fetchall()
 

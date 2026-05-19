@@ -14,6 +14,11 @@ class RunPreviewRequest(BaseModel):
     goal: str = Field(min_length=1, max_length=4000)
 
 
+class OllamaPlanRequest(BaseModel):
+    goal: str = Field(min_length=1, max_length=4000)
+    model: str | None = Field(default=None, min_length=1, max_length=120)
+
+
 class RunPreviewResponse(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
@@ -23,4 +28,3 @@ class RunPreviewResponse(BaseModel):
     next_step: str = Field(alias="nextStep", min_length=1)
     assigned_agents: list[AgentRole] = Field(alias="assignedAgents", min_length=1)
     created_at: datetime = Field(alias="createdAt")
-

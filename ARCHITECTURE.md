@@ -27,6 +27,7 @@ ligent/
   backend/                  # Python backend
     app.py                  # FastAPI app
     agents/                 # ADK agents
+    llm/                    # Local/provider-agnostic LLM adapters
     services/
     tools/
     state/
@@ -77,6 +78,12 @@ Use these references for future agent design, agent CLI patterns, task delegatio
 
 - https://github.com/google/agents-cli
 - https://github.com/google/adk-python
+
+### `backend/llm/`
+
+Provider-agnostic local model interfaces, Ollama integration, provider errors, and model response contracts.
+
+The default provider path is Ollama over `http://127.0.0.1:11434`. Use `LIGENT_OLLAMA_MODEL` to override the default model, or pass a model in the local planning request. Keep model outputs schema-driven and validate them with Pydantic before controller state changes.
 
 ### `backend/services/`
 

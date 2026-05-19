@@ -3,11 +3,17 @@ from datetime import UTC, datetime
 from pathlib import Path
 from uuid import uuid4
 
+from pydantic import ValidationError
+
 from agents.mock_agents import MockAgent
 from agents.roles import AgentRole
+from llm.contracts import JsonLLMProvider
+from llm.ollama import OllamaProvider
+from llm.planning import PLANNING_SCHEMA_HINT, PlanningOutput
 from services.schemas import RunPreviewResponse
 from state.models import (
     AgentMessage,
+    AgentResult,
     DecisionRecord,
     MessageType,
     ProjectState,
@@ -22,6 +28,7 @@ from state.store import ProjectStore
 DEFAULT_PROJECT_ID = "project_default"
 DEFAULT_PROJECT_NAME = "Ligent Workspace"
 DEFAULT_STATE_PATH = Path(__file__).resolve().parents[1] / ".local" / "ligent.sqlite"
+DEFAULT_OLLAMA_MODEL = "qwen2.5-coder:7b"
 
 
 TASK_PLAN: tuple[tuple[AgentRole, str], ...] = (
@@ -41,14 +48,20 @@ def get_default_state_path() -> Path:
     return DEFAULT_STATE_PATH
 
 
+def get_default_ollama_model() -> str:
+    return os.environ.get("LIGENT_OLLAMA_MODEL", DEFAULT_OLLAMA_MODEL)
+
+
 class LigentController:
     def __init__(
         self,
         store: ProjectStore | None = None,
         mock_agent: MockAgent | None = None,
+        llm_provider: JsonLLMProvider | None = None,
     ) -> None:
         self.store = store or ProjectStore(get_default_state_path())
         self.mock_agent = mock_agent or MockAgent()
+        self.llm_provider = llm_provider
 
     def run(self, user_request: str) -> RunPreviewResponse:
         goal = user_request.strip()
@@ -140,6 +153,116 @@ class LigentController:
             created_at=completed_run.created_at,
         )
 
+    def run_ollama_planning(
+        self,
+        user_request: str,
+        *,
+        model: str | None = None,
+    ) -> RunPreviewResponse:
+        goal = user_request.strip()
+        if not goal:
+            raise ValueError("user_request is required")
+
+        selected_model = (model or get_default_ollama_model()).strip()
+        if not selected_model:
+            raise ValueError("model is required")
+
+        provider = self.llm_provider or OllamaProvider()
+        prompt = self._create_planning_prompt(goal)
+        planning_output = self._generate_planning_output(
+            provider,
+            selected_model,
+            prompt,
+        )
+
+        now = datetime.now(UTC)
+        project = ProjectState(
+            id=DEFAULT_PROJECT_ID,
+            name=DEFAULT_PROJECT_NAME,
+            brief="Default local Ligent project state.",
+            updated_at=now,
+        )
+        run = RunState(
+            id=f"run_{uuid4().hex}",
+            project_id=project.id,
+            goal=goal,
+            status=RunStatus.RUNNING,
+            created_at=now,
+            updated_at=now,
+        )
+        task = self._create_task(
+            run.id,
+            goal,
+            AgentRole.PLANNER,
+            "Create a scoped local-model implementation plan.",
+            1,
+        )
+        message = self._create_message(
+            project.id,
+            run.id,
+            task,
+            "Create a scoped local-model implementation plan.",
+        )
+        result = AgentResult(
+            id=f"result_{message.id}",
+            message_id=message.id,
+            task_id=task.id,
+            agent=AgentRole.PLANNER,
+            result=planning_output.model_dump(),
+            evidence=[
+                f"provider=ollama",
+                f"model={selected_model}",
+                "validated_by=PlanningOutput",
+            ],
+            confidence=planning_output.confidence,
+        )
+
+        self.store.save_project(project)
+        self.store.save_run(run)
+        self.store.save_task(task)
+        self.store.save_agent_message(message)
+        self.store.save_agent_result(result)
+        self.store.save_task(
+            task.model_copy(
+                update={
+                    "status": TaskStatus.COMPLETED,
+                    "updated_at": datetime.now(UTC),
+                }
+            )
+        )
+        self.store.save_decision(
+            DecisionRecord(
+                id=f"decision_{uuid4().hex}",
+                run_id=run.id,
+                summary="Completed local Ollama planning session.",
+                reason=(
+                    "The planner response was parsed as JSON, validated with "
+                    "the PlanningOutput contract, and persisted only after "
+                    "schema validation succeeded."
+                ),
+                inputs=[goal, selected_model],
+                chosenOption="Use local Ollama for the planner step.",
+                rejectedOptions=["Use a hosted LLM provider by default."],
+            )
+        )
+
+        completed_run = run.model_copy(
+            update={
+                "status": RunStatus.COMPLETED,
+                "updated_at": datetime.now(UTC),
+            }
+        )
+        self.store.save_run(completed_run)
+
+        return RunPreviewResponse(
+            run_id=completed_run.id,
+            status=completed_run.status,
+            summary=planning_output.summary,
+            next_step=planning_output.next_step,
+            assigned_agents=[AgentRole.PLANNER],
+            created_at=completed_run.created_at,
+        )
+
     @staticmethod
     def _create_task(
         run_id: str,
@@ -188,3 +311,44 @@ class LigentController:
                 },
             }
         )
+
+    @staticmethod
+    def _create_planning_prompt(goal: str) -> str:
+        return (
+            "You are Ligent's planner agent. Produce only valid JSON matching "
+            "the schema. Keep tasks small, local-first, and safe by default.\n"
+            f"Schema:\n{PLANNING_SCHEMA_HINT}\n"
+            "Rules: acceptance must be an array of strings. confidence must be "
+            "a number from 0 to 1.\n"
+            f"User goal:\n{goal}"
+        )
+
+    @staticmethod
+    def _generate_planning_output(
+        provider: JsonLLMProvider,
+        model: str,
+        prompt: str,
+    ) -> PlanningOutput:
+        raw_output = provider.generate_json(
+            model=model,
+            prompt=prompt,
+            schema_hint=PLANNING_SCHEMA_HINT,
+        )
+        try:
+            return PlanningOutput.model_validate(raw_output)
+        except ValidationError as error:
+            repair_prompt = (
+                "Repair this JSON so it matches the schema exactly. Return only "
+                "valid JSON. Do not include markdown or commentary.\n"
+                f"Schema:\n{PLANNING_SCHEMA_HINT}\n"
+                "Rules: acceptance must be an array of strings. confidence must "
+                "be a number from 0 to 1.\n"
+                f"Validation error:\n{error}\n"
+                f"Invalid JSON object:\n{raw_output}"
+            )
+            repaired_output = provider.generate_json(
+                model=model,
+                prompt=repair_prompt,
+                schema_hint=PLANNING_SCHEMA_HINT,
+            )
+            return PlanningOutput.model_validate(repaired_output)
