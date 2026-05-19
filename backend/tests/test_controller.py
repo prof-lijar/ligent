@@ -28,7 +28,9 @@ def test_controller_creates_run_tasks_results_and_decision(tmp_path) -> None:
     ]
     assert len(tasks) == 6
     assert len(messages) == 6
-    assert len(decisions) == 1
+    assert len(decisions) == 2
+    assert decisions[0].summary == "Tool permission boundary enforced."
+    assert decisions[1].summary == "Completed deterministic mock orchestration."
     assert all(task.status == TaskStatus.COMPLETED for task in tasks)
 
     for task in tasks:

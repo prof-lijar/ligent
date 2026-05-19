@@ -73,6 +73,19 @@ class LigentController:
 
         self.store.save_project(project)
         self.store.save_run(run)
+        self.store.save_decision(
+            DecisionRecord(
+                id=f"decision_{uuid4().hex}",
+                run_id=run.id,
+                summary="Tool permission boundary enforced.",
+                reason=(
+                    "Workspace tools are scoped to workspace/ and writes or "
+                    "generated commands require explicit approval."
+                ),
+                inputs=["workspace/", "tool permissions"],
+                chosenOption="Fail closed on unsafe or unapproved tool requests.",
+            )
+        )
 
         completed_roles: list[AgentRole] = []
         for position, (role, instruction) in enumerate(TASK_PLAN, start=1):
