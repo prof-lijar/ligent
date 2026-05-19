@@ -1,0 +1,15 @@
+{
+  "name": "ligent",
+  "version": "0.1.0",
+  "private": true,
+  "workspaces": [
+    "desktop"
+  ],
+  "scripts": {
+    "desktop:dev": "npm run dev --workspace desktop",
+    "desktop:build": "npm run build --workspace desktop",
+    "desktop:typecheck": "npm run typecheck --workspace desktop",
+    "tauri:dev": "npm run tauri:dev --workspace desktop",
+    "tauri:build": "npm run tauri:build --workspace desktop"
+  }
+}
