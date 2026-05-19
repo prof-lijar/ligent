@@ -2,7 +2,9 @@
 
 ## Product Goal
 
-Ligent is an agent orchestration system for software projects. It acts as the single controller between the user, project state, tools, and specialized sub-agents. Its job is to turn a user goal into coordinated work across planning, design, implementation, testing, deployment, and documentation without losing context or letting agents conflict with each other.
+Ligent is a local-first coding agent orchestration system for software projects. It acts as the single controller between the user, project state, tools, local LLM providers, and specialized sub-agents. Its job is to turn a user goal into coordinated work across planning, design, implementation, testing, deployment, and documentation without losing context or letting agents conflict with each other.
+
+The product should be optimized for efficient local Ollama models, especially small models such as Qwen and Gemma. Larger hosted providers can remain possible behind an adapter, but they are not the MVP default.
 
 ## MVP Definition
 
@@ -11,6 +13,7 @@ The MVP should prove that Ligent can coordinate a small software task end to end
 ### MVP Capabilities
 
 - User interacts only with Ligent.
+- Ligent runs primarily against local Ollama models.
 - Ligent decomposes a user request into tasks.
 - Ligent assigns tasks to specialized sub-agents.
 - Sub-agents return structured outputs through Ligent.
@@ -26,6 +29,7 @@ The MVP should prove that Ligent can coordinate a small software task end to end
 - Complex learning from historical projects.
 - Full visual dashboard.
 - Multi-user collaboration.
+- Hosted LLM provider integrations as the default path.
 
 ## Core Design Decisions
 
@@ -40,6 +44,8 @@ Sub-agents should be spawned on demand for each task. This keeps the system simp
 ### State Model
 
 Ligent owns the shared state. Sub-agents receive scoped context and return structured results. They should not directly mutate global project state.
+
+Because the default models are small local models, state and prompts should stay compact. Ligent should pass only the task brief, relevant files or summaries, explicit constraints, and expected output schema needed for the assigned work.
 
 Minimum shared state:
 
@@ -65,6 +71,8 @@ Ligent uses hub-and-spoke coordination:
 6. Ligent synthesizes outputs.
 7. Ligent asks follow-up agents only when needed.
 8. Ligent returns the final answer to the user.
+
+The controller should prefer fewer, higher-quality delegation rounds over broad fan-out. Local models are fast and cheap to run, but the orchestration loop should still minimize redundant context, repeated reasoning, and unnecessary agent calls.
 
 ### Conflict Resolution
 
@@ -165,44 +173,66 @@ Because the repository is empty, the first implementation should optimize for fa
 
 Recommended stack:
 
-- Runtime: Node.js with TypeScript
-- Interface: CLI first
-- Persistence: local JSON files or SQLite
+- Desktop: Tauri with React
+- Backend: Python with FastAPI
+- Interface: lightweight Tauri desktop interface with React
+- Persistence: SQLite plus project files
 - Agent abstraction: provider-agnostic LLM adapter
-- Validation: Zod schemas for all agent messages
-- Tests: Vitest
+- Default LLM provider: Ollama over localhost
+- Default model targets: small local coding-capable models such as Qwen and Gemma
+- Validation: Pydantic for backend contracts, Zod for UI-facing TypeScript contracts if needed
+- Tests: Python unit tests for backend, UI tests for desktop flows
 
-The CLI-first approach keeps the orchestration engine independent from any future dashboard.
+The lightweight interface should prove the core orchestration loop without becoming a full dashboard. Keep the UI focused on one user goal input, live progress, agent outputs, decisions, conflicts, and final results.
+
+### Local Model Strategy
+
+The MVP should treat local Ollama as the first real provider.
+
+Design rules:
+
+- Keep the provider interface generic, but implement the Ollama provider in the Python backend before any hosted provider.
+- Do not require API keys for the default local path.
+- Keep prompts short, role-specific, and schema-driven.
+- Use deterministic settings where possible for planning, validation, and merge decisions.
+- Validate every model response with Pydantic before it reaches controller state.
+- Retry malformed output with a smaller repair prompt before failing the task.
+- Prefer task-specific context summaries over dumping full files or full project history.
+- Record model name, provider, prompt size estimate, response validation status, and retry count in task metadata.
+- Fail closed when a local model asks for a tool or file path outside the task scope.
+
+The first supported provider should call Ollama's local HTTP API. Hosted providers can be added later as optional adapters if the core orchestration loop proves useful.
 
 ### Main Modules
 
 ```text
-src/
-  cli/
-    index.ts
-  core/
-    ligent.ts
-    project-state.ts
-    task-planner.ts
-    conflict-resolver.ts
-  agents/
-    types.ts
-    planner.ts
-    designer.ts
-    frontend.ts
-    backend.ts
-    qa.ts
-    devops.ts
-    documentation.ts
-  llm/
-    provider.ts
-    mock-provider.ts
-  storage/
-    project-store.ts
-  schemas/
-    messages.ts
-    project.ts
-  tests/
+ligent/
+  desktop/                  # Tauri app
+    src/                    # React UI
+    src-tauri/
+
+  backend/                  # Python backend
+    app.py                  # FastAPI app
+    agents/                 # ADK agents
+    services/
+    tools/
+    state/
+    pyproject.toml
+
+  workspace/                # User project files
+  README.md
+```
+
+The execution flow should be:
+
+```text
+Tauri desktop UI
+  -> React dashboard
+  -> FastAPI backend / Tauri commands
+  -> Ligent backend orchestrator
+  -> Planner / Design / Implement / QA / DevOps agents
+  -> Ollama local models
+  -> SQLite + project files
 ```
 
 ### Message Contracts
@@ -261,21 +291,23 @@ Decision record fields:
 
 ### Milestone 1: Project Foundation
 
-Goal: Create the initial TypeScript project with a runnable CLI.
+Goal: Create the initial Tauri desktop app and Python backend with a runnable lightweight local interface.
 
 Deliverables:
 
 - `package.json`
-- TypeScript config
-- CLI entry point
+- Desktop app setup
+- `backend/pyproject.toml`
+- FastAPI app entry point
+- Minimal goal input and run view
 - Basic test setup
 - Lint or formatting baseline
 
 Acceptance criteria:
 
-- `npm test` runs
-- `npm run build` runs
-- CLI can print help text
+- Desktop build/test command runs
+- Backend test command runs
+- The local interface can submit a goal and show a placeholder run result.
 
 ### Milestone 2: Core State and Contracts
 
@@ -322,12 +354,14 @@ Deliverables:
 - Prompt templates or instruction builders
 - Mock provider support
 - LLM provider interface
+- Local-model prompt constraints
 
 Acceptance criteria:
 
 - Each MVP agent can receive a scoped task.
 - Each agent returns a validated structured result.
 - Ligent rejects malformed agent output.
+- Agent prompts stay compact enough for small local models.
 
 ### Milestone 5: Conflict Handling
 
@@ -344,21 +378,23 @@ Acceptance criteria:
 - Ligent detects incompatible agent recommendations.
 - Ligent records why one recommendation was chosen.
 
-### Milestone 6: Real LLM Provider
+### Milestone 6: Local Ollama Provider
 
-Goal: Connect the orchestrator to a real model provider.
+Goal: Connect the orchestrator to local Ollama models.
 
 Deliverables:
 
-- Provider configuration
-- API key loading
+- Ollama provider configuration
+- Local model selection
 - Structured response validation
 - Retry and error handling
+- Clear setup checks for missing Ollama or missing models
 
 Acceptance criteria:
 
-- Ligent can run one real multi-agent planning session from the CLI.
+- Ligent can run one real multi-agent planning session from the local interface using a local Ollama model.
 - Failed or malformed model output is handled gracefully.
+- The default path does not require hosted API keys or network access.
 
 ### Milestone 7: End-to-End Demo
 
@@ -378,14 +414,15 @@ Acceptance criteria:
 
 ## First Implementation Sequence
 
-1. Initialize a TypeScript CLI project.
+1. Initialize the Tauri desktop app under `desktop/`.
 2. Add schemas for project state, tasks, messages, agent results, and decisions.
-3. Implement a local JSON project store.
-4. Implement mock agents with deterministic outputs.
-5. Implement `LigentController.run(userRequest)`.
-6. Add tests for state creation, task assignment, message validation, and result synthesis.
-7. Add a real LLM provider after the orchestration loop works with mocks.
-8. Add README instructions and a sample run.
+3. Initialize the Python FastAPI backend under `backend/`.
+4. Implement a SQLite-backed project store.
+5. Implement mock ADK-style agents with deterministic outputs.
+6. Implement `LigentController.run(userRequest)`.
+7. Add tests for state creation, task assignment, message validation, and result synthesis.
+8. Add the local Ollama provider after the orchestration loop works with mocks.
+9. Add README instructions and a sample local interface run.
 
 ## Key Risks
 
@@ -401,9 +438,13 @@ If sub-agents mutate shared state directly, coordination will become unreliable.
 
 Free-form agent output will make orchestration brittle. Structured schemas should be mandatory from the beginning.
 
+### Small-Model Drift
+
+Small local models may ignore instructions, produce malformed JSON, or overreach beyond the scoped task. Keep prompts short, validate all outputs, retry with repair prompts, and fail closed when output cannot be trusted.
+
 ### Premature Dashboard Work
 
-A dashboard may be useful later, but the engine should work independently first.
+A richer dashboard may be useful later, but the MVP interface should stay focused on the orchestration run itself.
 
 ### Unsafe Tool Creation
 
@@ -444,6 +485,7 @@ Dynamic tool creation should require explicit approval and sandboxing. For MVP, 
 
 - Ligent can produce a coherent plan from an ambiguous user request.
 - Ligent can coordinate at least three agents without direct agent-to-agent communication.
+- Ligent can run its default path with a local Ollama model.
 - Agent outputs are structured, validated, and traceable.
 - Conflicts are recorded and resolved.
 - The final result explains what happened, what changed, and what remains.

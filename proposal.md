@@ -2,7 +2,7 @@
 
 ## Overview
 
-Ligent is an LLM-powered agent orchestrator that acts as an overall agent controller. It possesses its own skills, knowledge, and experiences to coordinate multiple specialized sub-agents across the full software development lifecycle — from project planning through deployment and monitoring.
+Ligent is a local-first, LLM-powered coding agent orchestrator that acts as an overall agent controller. It is designed to run efficiently with small Ollama models such as Qwen and Gemma while coordinating multiple specialized sub-agents across the full software development lifecycle — from project planning through deployment and monitoring.
 
 Ligent serves as the sole intermediary between all sub-agents, routing communication, resolving conflicts, and ensuring coherent project execution through a collaborative coordination model.
 
@@ -12,7 +12,7 @@ Ligent serves as the sole intermediary between all sub-agents, routing communica
 
 - LLM-powered agent with rules, skills, and tools
 - Acts as the sole intermediary — all inter-agent communication flows through Ligent
-- Can dynamically create tools for sub-agents on its own initiative or by user request
+- Uses declared tools with explicit permission boundaries for the MVP
 - Maintains overall project context, state, and history across all agents
 - Arbitrates conflicts between sub-agents
 
@@ -39,24 +39,24 @@ Ligent uses a **collaborative** coordination model:
 - Ligent proactively identifies cross-agent dependencies and potential conflicts
 - When sub-agents disagree (e.g., QA reports a bug, Frontend claims intended behavior), Ligent arbitrates based on project requirements and context
 
-## Open Questions
+## MVP Decisions
 
 ### Ligent's Knowledge & Learning
-- What gives Ligent its skills and knowledge? (Knowledge base, RAG, system prompts, rules, or a combination)
-- Does Ligent learn from past projects to improve orchestration over time?
+- MVP knowledge comes from project files, explicit user goals, structured state, and concise agent instructions.
+- Long-term learning from past projects is out of scope until the core orchestration loop is proven.
 
 ### Sub-Agent Lifecycle
-- Are sub-agents persistent (always running, maintaining state) or spawned on demand?
-- Does each sub-agent have a fixed configuration, or can Ligent reconfigure them per project?
+- Sub-agents are spawned on demand for scoped tasks.
+- Agent configuration is explicit and role-based for the MVP.
 
 ### Collaboration Details
-- When a sub-agent needs input from another, does Ligent only route on request, or does it proactively anticipate needs?
-- How are cross-agent conflicts resolved beyond arbitration?
+- Sub-agent communication flows through Ligent only.
+- Conflicts are resolved by Ligent using user requirements, project constraints, evidence, and test results.
 
 ### User Interaction
-- Does the user interact only with Ligent, or can they directly address individual sub-agents?
-- What is the user interface — chat, dashboard, hybrid, or something else?
+- The user interacts only with Ligent.
+- The MVP interface is a lightweight Tauri desktop app with a React UI.
 
 ### Tooling
-- What is the mechanism for Ligent to dynamically create tools for sub-agents?
-- Are tools shared across sub-agents, or strictly isolated per agent?
+- MVP tools are declared statically and exposed through narrow permission boundaries.
+- Sub-agents receive only the tools and context needed for their scoped task.
